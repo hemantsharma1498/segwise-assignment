@@ -4,6 +4,6 @@ import (
 	"net/http"
 )
 
-func (s *Server) Login(w http.ResponseWriter, r *http.Request) error {
-	return nil
+func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+
 }

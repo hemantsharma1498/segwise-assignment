@@ -4,12 +4,8 @@ import (
 	"net/http"
 )
 
-/*
-*ConfirmSale
- */
-
 func (s *Server) Routes() {
-	s.Router.HandleFunc("/api/login", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.Router.HandleFunc("/api/home", withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -25,9 +21,7 @@ func withCORS(handler http.Handler) http.HandlerFunc {
 
 		// List of allowed origins
 		allowedOrigins := []string{
-			//	"https://main.d3to1cludkqj3l.amplifyapp.com",
 			"http://localhost:3000",
-			"https://main.d3to1cludkqj3l.amplifyapp.com/",
 		}
 
 		// Check if the request origin is in the list of allowed origins
