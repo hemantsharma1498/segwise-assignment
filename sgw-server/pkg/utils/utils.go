@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/mail"
 	"time"
@@ -53,10 +52,7 @@ func ValidEmail(email string) bool {
 	return err == nil
 }
 
-func WriteResponse(w http.ResponseWriter, err error, msg any, httpStatus int) error {
-	if err != nil {
-		log.Println(err)
-	}
+func WriteResponse(w http.ResponseWriter, msg any, httpStatus int) error {
 	w.Header().Add("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(httpStatus)
 	return json.NewEncoder(w).Encode(msg)
@@ -64,4 +60,42 @@ func WriteResponse(w http.ResponseWriter, err error, msg any, httpStatus int) er
 
 func IsoDateToTime(date string) (time.Time, error) {
 	return time.Parse(time.RFC3339, date)
+}
+
+func WithCORS(handler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get the origin from the request
+		origin := r.Header.Get("Origin")
+
+		// List of allowed origins
+		allowedOrigins := []string{
+			"http://localhost:3000",
+		}
+
+		// Check if the request origin is in the list of allowed origins
+		allowedOrigin := ""
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				allowedOrigin = origin
+				break
+			}
+		}
+
+		// If the origin is allowed, set the CORS headers
+		if allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Origin, Accept, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		// Handle preflight requests
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Call the original handler
+		handler.ServeHTTP(w, r)
+
+	}
 }

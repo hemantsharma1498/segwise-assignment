@@ -1,14 +1,14 @@
 package scraper
 
 import (
+	"bufio"
 	"context"
-	"errors"
 	"fmt"
-	"math/rand"
-	"path"
-	"time"
-
 	"github.com/chromedp/chromedp"
+	"os"
+	"path"
+	"strings"
+	"time"
 )
 
 type Experience struct {
@@ -46,27 +46,17 @@ type Scraper struct {
 	Profile     *Profile
 }
 
-var (
-	ErrPageNotFound     = errors.New("page not found")
-	ErrTimeout          = errors.New("operation timed out")
-	ErrNotAuthenticated = errors.New("not authenticated")
-	ErrRateLimited      = errors.New("rate limited by LinkedIn")
-	ErrDataNotFound     = errors.New("required data not found")
-	ErrBotDetected      = errors.New("bot detection triggered")
-)
+func NewScraper(email, password, linkedInURL string) (*Scraper, error) {
 
-func NewScraper(email, password, linkedInURL string) *Scraper {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", false),
+		chromedp.Flag("headless", false), // Start headless
 		chromedp.Flag("disable-gpu", false),
-		chromedp.Flag("enable-automation", false),
 		chromedp.Flag("disable-extensions", false),
+		chromedp.Flag("disable-setuid-sandbox", true),
 	)
-
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	ctx, _ := chromedp.NewContext(allocCtx)
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-
+	ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
 	s := &Scraper{
 		ctx:         ctx,
 		cancel:      cancel,
@@ -76,12 +66,52 @@ func NewScraper(email, password, linkedInURL string) *Scraper {
 		Profile:     &Profile{},
 	}
 
-	s.login()
-	return s
+	err := s.login(false)
+	if err == nil {
+		return s, nil
+	}
+
+	// If we get to a verification page, restart with visible browser
+	if strings.Contains(err.Error(), "verification") {
+		s.cancel() // Clean up the first browser
+
+		// Create visible browser for verification
+		visibleOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.Flag("headless", false),
+			chromedp.Flag("disable-gpu", false),
+			chromedp.Flag("disable-extensions", false),
+			chromedp.Flag("disable-setuid-sandbox", true),
+		)
+		visibleAllocCtx, visibleCancel := chromedp.NewExecAllocator(context.Background(), visibleOpts...)
+		defer visibleCancel()
+
+		ctx, _ = chromedp.NewContext(visibleAllocCtx)
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
+		s.ctx = ctx
+		s.cancel = cancel
+
+		// Try login with visible browser
+		if err := s.login(false); err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to login even with verification: %w", err)
+		}
+
+		// After successful verification, switch back to headless
+		s.cancel()
+		ctx, _ = chromedp.NewContext(allocCtx)
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Minute)
+		s.ctx = ctx
+		s.cancel = cancel
+	} else {
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+
+	return s, nil
 }
 
-func (s *Scraper) login() error {
+func (s *Scraper) login(headless bool) error {
 	fmt.Println("Logging user in...")
+
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate("https://www.linkedin.com/login"),
 		chromedp.WaitVisible(`input[name="session_key"]`),
@@ -92,16 +122,52 @@ func (s *Scraper) login() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Logged in...")
+
+	time.Sleep(1 * time.Second)
+
+	var currentURL string
+	err = chromedp.Run(s.ctx,
+		chromedp.Location(&currentURL),
+	)
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(currentURL, "checkpoint/challenge") {
+		if headless {
+			return fmt.Errorf("verification required, please retry with headless=false")
+		}
+
+		fmt.Println("\nSecurity verification required!")
+		fmt.Println("Please complete the verification puzzle in the browser window")
+		fmt.Print("\nPress Enter once you've completed the verification...")
+		reader := bufio.NewReader(os.Stdin)
+		_, _ = reader.ReadString('\n')
+
+		err = chromedp.Run(s.ctx,
+			chromedp.Location(&currentURL),
+		)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(currentURL, "checkpoint/challenge") {
+			return fmt.Errorf("verification was not completed successfully")
+		}
+	}
+
+	fmt.Println("Logged in successfully")
 	return nil
 }
 
 func (s *Scraper) GetRecentPosts() error {
+	fmt.Println("Getting latest posts")
+	url := path.Join(s.linkedInURL, "recent-activity/all/")
 	var posts []Post
 	err := chromedp.Run(s.ctx,
+		chromedp.Navigate(url),
+		chromedp.Sleep(2*time.Second),
 		chromedp.Evaluate(`
-            try {
-                return Array.from(document.querySelectorAll('.feed-shared-update-v2')).slice(0, 5).map(post => {
+                 Array.from(document.querySelectorAll('.feed-shared-update-v2')).map(post => {
                     // Check if it's a repost by looking for specific class or text in header
                     const header = post.querySelector('.update-components-header__text-view');
                     if (header && header.textContent.includes('reposted this')) {
@@ -121,20 +187,15 @@ func (s *Scraper) GetRecentPosts() error {
                         title: title,
                         content: content
                     };
-                }).filter(item => item !== null);
-            } catch (err) {
-                console.error(err);
-                return [];
-            }
+                }).filter(item => item !== null).slice(0, 5);
         `, &posts),
 	)
 
+	fmt.Println(posts)
+	fmt.Println()
+
 	if err != nil {
 		return fmt.Errorf("failed to extract posts: %w", err)
-	}
-
-	if len(posts) == 0 {
-		return ErrDataNotFound
 	}
 
 	s.Profile.Posts = posts
@@ -142,43 +203,29 @@ func (s *Scraper) GetRecentPosts() error {
 }
 
 func (s *Scraper) GetExperiences() error {
+	fmt.Println("Getting experience")
 	url := path.Join(s.linkedInURL, "details/experience")
 
-	// First navigate and scroll
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(url),
-		// Add explicit timeout
 		chromedp.WaitVisible(`main`, chromedp.ByQuery),
-
-		// Add some random delay to appear more human-like
-		chromedp.Sleep(time.Duration(1+rand.Intn(2))*time.Second),
-
-		// Ensure we're logged in by checking for a common LinkedIn element
 		chromedp.WaitVisible(`div[data-view-name="profile-component-entity"]`),
 	)
 	if err != nil {
 		return fmt.Errorf("navigation failed: %v", err)
 	}
-	// Get all experience elements
-	//var whatever interface{}
+
 	var experienceElements []Experience
 	err = chromedp.Run(s.ctx,
 		chromedp.Evaluate(`
         Array.from(document.querySelectorAll('.pvs-list__paged-list-item')).map(el => {
             const position = el.querySelector('div[data-view-name="profile-component-entity"]');
             if (!position) return null;
-            
-            // Get title from the first level
             const title = position.querySelector('div.display-flex.align-items-center.mr1.t-bold span[aria-hidden="true"]')?.textContent?.trim() 
                         || position.querySelector('div.display-flex.align-items-center.mr1.t-bold span.visually-hidden')?.textContent?.trim()
                         || '';
-            
-            // Get company from the second level
             const company = position.querySelector('span.t-14.t-normal span[aria-hidden="true"]')?.textContent?.trim() || '';
-            
-            // Get duration from the third level
             const duration = position.querySelector('span.t-14.t-normal.t-black--light span[aria-hidden="true"]')?.textContent?.trim() || '';
-
             return { title, company, duration };
         }).filter(item => item !== null);
 		`, &experienceElements),
@@ -188,16 +235,18 @@ func (s *Scraper) GetExperiences() error {
 		return fmt.Errorf("failed to extract experiences: %v", err)
 	}
 
+	s.Profile.Experience = experienceElements
+
 	return nil
 }
 
 func (s *Scraper) GetEducation() error {
+	fmt.Println("Getting education")
 	url := path.Join(s.linkedInURL, "details/education")
 
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(url),
 		chromedp.WaitVisible(`main`, chromedp.ByQuery),
-		chromedp.Sleep(time.Duration(1+rand.Intn(2))*time.Second),
 		chromedp.WaitVisible(`div[data-view-name="profile-component-entity"]`),
 	)
 	if err != nil {
@@ -210,13 +259,9 @@ func (s *Scraper) GetEducation() error {
             Array.from(document.querySelectorAll('.pvs-list__paged-list-item')).map(el => {
                 const position = el.querySelector('div[data-view-name="profile-component-entity"]');
                 if (!position) return null;
-                
                 const institute = position.querySelector('div.display-flex.align-items-center.mr1.hoverable-link-text.t-bold span[aria-hidden="true"]')?.textContent?.trim() || '';
-                
                 const major = position.querySelector('span.t-14.t-normal span[aria-hidden="true"]')?.textContent?.trim() || '';
-                
                 const duration = position.querySelector('span.t-14.t-normal.t-black--light span[aria-hidden="true"]')?.textContent?.trim() || '';
-
                 return {
                     institute,
                     major,
@@ -229,12 +274,12 @@ func (s *Scraper) GetEducation() error {
 		return fmt.Errorf("failed to extract education: %v", err)
 	}
 	s.Profile.Education = educationElements
-	fmt.Println(educationElements)
 
 	return nil
 }
 
 func (s *Scraper) GetNameAndLocation() error {
+	fmt.Println("Getting name and location")
 	var name, location string
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(s.linkedInURL),
@@ -252,13 +297,23 @@ func (s *Scraper) GetNameAndLocation() error {
 }
 
 func (s *Scraper) GetAbout() error {
+	fmt.Println("Getting about")
 	var about string
 	err := chromedp.Run(s.ctx,
-		chromedp.Navigate(s.linkedInURL),
-		chromedp.Text(`.inline-show-more-text--is-collapsed`, &about),
+		chromedp.WaitVisible(`div[class*="display-flex ph5"]`), // Wait for main content
+		chromedp.Evaluate(`(() => {
+            // Find the About section's text content
+            const aboutSpans = document.querySelectorAll('div[class*="display-flex full-width"] span[aria-hidden="true"]');
+            if (!aboutSpans.length) return "";
+            
+            return Array.from(aboutSpans)
+                .map(span => span.textContent.trim())
+                .filter(text => text.length > 0)[0]
+        })()`, &about),
 	)
+
 	if err != nil {
-		return fmt.Errorf("failed to get about: %v", err)
+		return fmt.Errorf("failed to get about: %w", err)
 	}
 
 	s.Profile.About = about
