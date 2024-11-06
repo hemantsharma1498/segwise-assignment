@@ -6,11 +6,12 @@ import (
 )
 
 type Server struct {
-	Router *http.ServeMux
+	Router       *http.ServeMux
+	OpenAIApiKey string
 }
 
-func InitServer() *Server {
-	s := &Server{Router: http.NewServeMux()}
+func InitServer(OpenAIApiKey string) *Server {
+	s := &Server{Router: http.NewServeMux(), OpenAIApiKey: OpenAIApiKey}
 	s.Routes()
 	return s
 }

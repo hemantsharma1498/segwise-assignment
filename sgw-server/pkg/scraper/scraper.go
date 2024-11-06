@@ -18,7 +18,6 @@ type Experience struct {
 }
 
 type Post struct {
-	Title   string `json:"title"`
 	Content string `json:"content"`
 }
 
@@ -177,22 +176,16 @@ func (s *Scraper) GetRecentPosts() error {
                     // Get the content wrapper
                     const wrapper = post.querySelector('.feed-shared-update-v2__description-wrapper');
                     if (!wrapper) return null;
-
-                    const title = wrapper.querySelector('.break-words span[dir="ltr"]')?.textContent?.trim() || '';
-                    const content = wrapper.querySelector('.feed-shared-inline-show-more-text')?.textContent?.trim() || '';
+                    const content = wrapper.querySelector('.feed-shared-inline-show-more-text')?.textContent?.trim() || wrapper.querySelector('.break-words span[dir="ltr"]')?.textContent?.trim() || '';;
                     
-                    if (!title && !content) return null;
+                    if (!content) return null;
 
                     return {
-                        title: title,
                         content: content
                     };
                 }).filter(item => item !== null).slice(0, 5);
         `, &posts),
 	)
-
-	fmt.Println(posts)
-	fmt.Println()
 
 	if err != nil {
 		return fmt.Errorf("failed to extract posts: %w", err)
@@ -208,6 +201,7 @@ func (s *Scraper) GetExperiences() error {
 
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(url),
+		chromedp.Sleep(2*time.Second),
 		chromedp.WaitVisible(`main`, chromedp.ByQuery),
 		chromedp.WaitVisible(`div[data-view-name="profile-component-entity"]`),
 	)
@@ -246,6 +240,7 @@ func (s *Scraper) GetEducation() error {
 
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(url),
+		chromedp.Sleep(2*time.Second),
 		chromedp.WaitVisible(`main`, chromedp.ByQuery),
 		chromedp.WaitVisible(`div[data-view-name="profile-component-entity"]`),
 	)
@@ -283,6 +278,7 @@ func (s *Scraper) GetNameAndLocation() error {
 	var name, location string
 	err := chromedp.Run(s.ctx,
 		chromedp.Navigate(s.linkedInURL),
+		chromedp.Sleep(2*time.Second),
 		chromedp.WaitVisible(`.mt2.relative`),
 		chromedp.Text(`h1.inline.t-24.v-align-middle.break-words`, &name),
 		chromedp.Text(`.text-body-small.inline.t-black--light.break-words`, &location),

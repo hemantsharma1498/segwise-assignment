@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) Routes() {
-	s.Router.HandleFunc("/api/login", utils.WithCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.Router.HandleFunc("/api/home", utils.WithCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)

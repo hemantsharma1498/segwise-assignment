@@ -4,11 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/hemantsharma1498/segwise-assignment/pkg/scraper"
+	"golang.org/x/crypto/argon2"
 	"net/http"
 	"net/mail"
 	"time"
-
-	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -64,15 +64,12 @@ func IsoDateToTime(date string) (time.Time, error) {
 
 func WithCORS(handler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get the origin from the request
 		origin := r.Header.Get("Origin")
 
-		// List of allowed origins
 		allowedOrigins := []string{
-			"http://localhost:3000",
+			"http://localhost:8080",
 		}
 
-		// Check if the request origin is in the list of allowed origins
 		allowedOrigin := ""
 		for _, allowed := range allowedOrigins {
 			if origin == allowed {
@@ -81,7 +78,6 @@ func WithCORS(handler http.Handler) http.HandlerFunc {
 			}
 		}
 
-		// If the origin is allowed, set the CORS headers
 		if allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -89,13 +85,29 @@ func WithCORS(handler http.Handler) http.HandlerFunc {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
-		// Handle preflight requests
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		// Call the original handler
 		handler.ServeHTTP(w, r)
 
 	}
+}
+
+func GetUsedParams(profile scraper.Profile) []string {
+	checks := map[string]func() bool{
+		"Posts":      func() bool { return len(profile.Posts) > 0 },
+		"Experience": func() bool { return len(profile.Experience) > 0 },
+		"Education":  func() bool { return len(profile.Education) > 0 },
+		"Location":   func() bool { return profile.Location != "" },
+		"Name":       func() bool { return profile.Name != "" },
+	}
+	paramsUsed := make([]string, 0, len(checks))
+
+	for param, check := range checks {
+		if check() {
+			paramsUsed = append(paramsUsed, param)
+		}
+	}
+	return paramsUsed
 }

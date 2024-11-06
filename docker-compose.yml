@@ -1,0 +1,23 @@
+services:
+  sgw-client:
+    build:
+      context: ./sgw-client/
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    volumes:
+      - ./sgw-client:/usr/share/nginx/html
+      - ./sgw-client/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    environment:
+      - API_URL=http://sgw-server:3100  # Updated to use the service name
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
