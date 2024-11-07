@@ -3,22 +3,22 @@
 Generate personalized connection messages for LinkedIn profiles using AI. The system analyzes a target profile's posts, experience, and education to create relevant connection requests.
 
 ## 🏗️ Architecture
-
 ```mermaid
 flowchart TD
     A[Web Client] -->|POST /api/home| B[Go Web Server]
     B --> C[LinkedIn Scraper + human verification]
-    C --> D[OpenAI API]
-    D --> E[Generated Message]B
+    C --> D[Profile Parser]
+    D --> E[OpenAI API]
+    E -->|Generated Message| B
     B -->|JSON Response| A
-    
+
     subgraph Server Components
         B
         C
         D
+        E
     end
 ```
-
 ## 🛠️ Tech Stack
 - **Backend**: Go web server
 - **Frontend**: HTML, CSS, JavaScript
