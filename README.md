@@ -97,6 +97,10 @@ cd sgw-server
 go run cmd/segwise/main.go
 ```
 
+## 🚀 Remote Setup
+Remote setup is not possible in the current state due to manual human verification requirement.
+
+
 ## 📝 Usage Instructions
 
 1. Ensure clear desktop environment with server terminal visible
