@@ -1,4 +1,4 @@
-[![Go Version](https://img.shields.io/github/go-mod/go-version/your-username/repo-name)](https://golang.org/)
+
 
 Generate personalized connection messages for LinkedIn profiles using AI. The system analyzes a target profile's posts, experience, and education to create relevant connection requests.
 
