@@ -2,13 +2,11 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
-
 	"github.com/hemantsharma1498/segwise-assignment/pkg/openai"
 	"github.com/hemantsharma1498/segwise-assignment/pkg/scraper"
 	"github.com/hemantsharma1498/segwise-assignment/pkg/utils"
+	"log"
+	"net/http"
 )
 
 func (s *Server) Home(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +32,6 @@ func (s *Server) Home(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error while getting posts: %v\n", err)
 	}
 
-	fmt.Println(len(scraper.Profile.Posts))
 	//If posts are less than 2, get user information
 	if len(scraper.Profile.Posts) <= 2 {
 		if err := scraper.GetExperiences(); err != nil {
@@ -46,7 +43,6 @@ func (s *Server) Home(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	go scraper.Close()
-	fmt.Printf("%v+\n", scraper.Profile)
 
 	msg, err := openai.GetMessage(*scraper.Profile, s.OpenAIApiKey)
 	if err != nil {
