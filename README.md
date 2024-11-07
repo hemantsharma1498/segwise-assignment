@@ -8,16 +8,14 @@ Generate personalized connection messages for LinkedIn profiles using AI. The sy
 flowchart TD
     A[Web Client] -->|POST /api/home| B[Go Web Server]
     B --> C[LinkedIn Scraper + human verification]
-    C --> D[Profile Parser]
-    D --> E[OpenAI API]
-    E -->|Generated Message| B
+    C --> D[OpenAI API]
+    D --> E[Generated Message]B
     B -->|JSON Response| A
     
     subgraph Server Components
         B
         C
         D
-        E
     end
 ```
 
