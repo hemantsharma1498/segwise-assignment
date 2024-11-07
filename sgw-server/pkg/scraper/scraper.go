@@ -1,3 +1,27 @@
+/*
+	Package scraper provides functionality to programmatically extract profile information from LinkedIn.
+
+It uses Chrome DevTools Protocol (CDP) via the chromedp package to automate browser interactions
+and extract various sections of LinkedIn profiles including basic information, experience,
+education, and recent posts.
+Scraping is down by injecting javscript in the launched chrome instance, and getting the results
+
+Basic usage:
+
+	scraper, err := scraper.NewScraper("email", "password", "https://www.linkedin.com/in/username")
+	if err != nil {
+	    log.Fatal(err)
+	}
+	defer scraper.Close()
+
+Fetch profile information:
+
+	scraper.GetNameAndLocation()
+	scraper.GetAbout()
+	scraper.GetExperiences()
+	scraper.GetEducation()
+	scraper.GetRecentPosts()
+*/
 package scraper
 
 import (
@@ -11,31 +35,58 @@ import (
 	"time"
 )
 
+/*
+	Experience represents a single work experience entry from a LinkedIn profile.
+
+It contains details about the job title, company, and duration of employment.
+*/
 type Experience struct {
-	Company  string `json:"company"`
-	Duration string `json:"duration"`
-	Title    string `json:"title"`
+	Company  string `json:"company"`  // Name of the employer
+	Duration string `json:"duration"` // Period of employment (e.g., "2019 - Present")
+	Title    string `json:"title"`    // Job title or role
 }
 
+/*
+	Post represents a LinkedIn post made by the profile owner.
+
+It contains the textual content of the post.
+*/
 type Post struct {
-	Content string `json:"content"`
+	Content string `json:"content"` // Text content of the post
 }
 
+/*
+	Education represents an educational background entry from a LinkedIn profile.
+
+It contains details about the educational institution, field of study, and duration.
+*/
 type Education struct {
-	Institute string `json:"institute"`
-	Major     string `json:"major"`
-	Duration  string `json:"duration"`
+	Institute string `json:"institute"` // Name of the educational institution
+	Major     string `json:"major"`     // Field of study or degree program
+	Duration  string `json:"duration"`  // Period of study (e.g., "2015 - 2019")
 }
 
+/*
+	Profile represents the complete LinkedIn profile information that can be scraped.
+
+It contains all the profile sections including personal info, experiences,
+education history, and recent posts.
+*/
 type Profile struct {
-	Name       string
-	Location   string
-	About      string
-	Experience []Experience
-	Education  []Education
-	Posts      []Post
+	Name       string       // Full name of the profile owner
+	Location   string       // Geographic location
+	About      string       // "About" section content
+	Experience []Experience // List of work experiences
+	Education  []Education  // List of education entries
+	Posts      []Post       // List of recent posts
 }
 
+/*
+	Scraper handles the LinkedIn profile scraping operations.
+
+It maintains the browser context and authentication state required
+for accessing LinkedIn profile information.
+*/
 type Scraper struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -45,6 +96,21 @@ type Scraper struct {
 	Profile     *Profile
 }
 
+/*
+	NewScraper creates and initializes a new LinkedIn scraper with the provided credentials.
+
+It handles the initial login process and automatically manages browser visibility
+for security verification if required.
+
+Parameters:
+  - email: LinkedIn account email
+  - password: LinkedIn account password
+  - linkedInURL: Target profile URL to scrape
+
+Returns:
+  - *Scraper: Initialized scraper instance
+  - error: Any error encountered during setup or login
+*/
 func NewScraper(email, password, linkedInURL string) (*Scraper, error) {
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -108,6 +174,18 @@ func NewScraper(email, password, linkedInURL string) (*Scraper, error) {
 	return s, nil
 }
 
+/*
+	login authenticates with LinkedIn using the provided credentials.
+
+It automatically handles security verification challenges by switching
+to a visible browser when necessary.
+
+Parameters:
+  - headless: Whether to use headless browser mode
+
+Returns:
+  - error: Any error encountered during login
+*/
 func (s *Scraper) login(headless bool) error {
 	fmt.Println("Logging user in...")
 
@@ -158,6 +236,14 @@ func (s *Scraper) login(headless bool) error {
 	return nil
 }
 
+/*
+	GetRecentPosts retrieves the 5 most recent posts from the profile,
+
+excluding reposts. The results are stored in Profile.Posts.
+
+Returns:
+  - error: Any error encountered while fetching posts
+*/
 func (s *Scraper) GetRecentPosts() error {
 	fmt.Println("Getting latest posts")
 	url := path.Join(s.linkedInURL, "recent-activity/all/")
@@ -195,6 +281,14 @@ func (s *Scraper) GetRecentPosts() error {
 	return nil
 }
 
+/*
+	GetExperiences extracts work experience entries from the profile.
+
+The results are stored in Profile.Experience.
+
+Returns:
+  - error: Any error encountered while fetching experiences
+*/
 func (s *Scraper) GetExperiences() error {
 	fmt.Println("Getting experience")
 	url := path.Join(s.linkedInURL, "details/experience")
@@ -234,6 +328,14 @@ func (s *Scraper) GetExperiences() error {
 	return nil
 }
 
+/*
+	GetEducation extracts education history from the profile.
+
+The results are stored in Profile.Education.
+
+Returns:
+  - error: Any error encountered while fetching education
+*/
 func (s *Scraper) GetEducation() error {
 	fmt.Println("Getting education")
 	url := path.Join(s.linkedInURL, "details/education")
@@ -273,6 +375,14 @@ func (s *Scraper) GetEducation() error {
 	return nil
 }
 
+/*
+	GetNameAndLocation retrieves the profile owner's name and location.
+
+The results are stored in Profile.Name and Profile.Location.
+
+Returns:
+  - error: Any error encountered while fetching name and location
+*/
 func (s *Scraper) GetNameAndLocation() error {
 	fmt.Println("Getting name and location")
 	var name, location string
@@ -292,6 +402,14 @@ func (s *Scraper) GetNameAndLocation() error {
 	return nil
 }
 
+/*
+	GetAbout extracts the "About" section content from the profile.
+
+The result is stored in Profile.About.
+
+Returns:
+  - error: Any error encountered while fetching about section
+*/
 func (s *Scraper) GetAbout() error {
 	fmt.Println("Getting about")
 	var about string
@@ -320,11 +438,9 @@ func (s *Scraper) Close() {
 	s.cancel()
 }
 
-func indexOf(slice []string, item string) int {
-	for i, s := range slice {
-		if s == item {
-			return i
-		}
-	}
-	return -1
-}
+/*
+	Close releases all resources associated with the scraper,
+
+including the browser context. This should be called when
+the scraper is no longer needed.
+*/

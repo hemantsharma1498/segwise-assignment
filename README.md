@@ -73,6 +73,8 @@ type HomeRes struct {
 4. Compile data into Profile struct
 5. Generate connection message using GPT-4o-mini (temperature: 0.3)
 
+Note: Refer sgw-server/pkg/scraper/scraper.go and sgw-server/pkg/openai/openai.go for detailed package documentation
+
 ## 🚀 Local Setup
 
 1. Clone the repository
